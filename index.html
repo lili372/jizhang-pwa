@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#4caf7d" />
+  <title>记账</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="icons/icon.svg" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- 首页 -->
+  <section class="page page-home" data-page="home">
+    <header class="summary-card">
+      <div class="summary-month" id="summaryMonth">—— 年 —— 月</div>
+      <div class="summary-balance">
+        <div class="summary-balance-label">本月结余</div>
+        <div class="summary-balance-value" id="summaryBalance">0.00</div>
+      </div>
+      <div class="summary-row">
+        <div class="summary-item">
+          <div class="summary-item-label">收入</div>
+          <div class="summary-item-value income" id="summaryIncome">0.00</div>
+        </div>
+        <div class="summary-item">
+          <div class="summary-item-label">支出</div>
+          <div class="summary-item-value expense" id="summaryExpense">0.00</div>
+        </div>
+      </div>
+    </header>
+
+    <div class="list-header">账单</div>
+    <div class="bill-list" id="billList">
+      <div class="empty-hint">还没有记录,点下方 + 开始记一笔</div>
+    </div>
+  </section>
+
+  <!-- 统计 -->
+  <section class="page page-stats hidden" data-page="stats">
+    <header class="stats-header">
+      <button class="month-nav" id="statsPrevMonth">‹</button>
+      <div class="stats-month" id="statsMonth">—— 年 —— 月</div>
+      <button class="month-nav" id="statsNextMonth">›</button>
+    </header>
+    <div class="stats-tabs">
+      <button class="stats-tab active" data-type="expense">支出</button>
+      <button class="stats-tab" data-type="income">收入</button>
+    </div>
+    <div class="stats-total" id="statsTotal">0.00</div>
+
+    <div class="chart-section">
+      <div class="chart-title">分类占比</div>
+      <canvas id="pieChart" width="600" height="600"></canvas>
+      <div class="category-ranking" id="categoryRanking"></div>
+    </div>
+
+    <div class="chart-section">
+      <div class="chart-title">近 6 个月趋势</div>
+      <canvas id="barChart" width="750" height="400"></canvas>
+    </div>
+  </section>
+
+  <!-- 设置 -->
+  <section class="page page-settings hidden" data-page="settings">
+    <div class="settings-group">
+      <div class="settings-title">分类管理</div>
+      <button class="settings-item" id="manageExpenseCats">
+        <span>支出分类</span><span class="chevron">›</span>
+      </button>
+      <button class="settings-item" id="manageIncomeCats">
+        <span>收入分类</span><span class="chevron">›</span>
+      </button>
+    </div>
+
+    <div class="settings-group">
+      <div class="settings-title">数据</div>
+      <button class="settings-item" id="exportBtn">
+        <span>导出数据</span><span class="chevron">↓</span>
+      </button>
+      <button class="settings-item" id="importBtn">
+        <span>导入数据</span><span class="chevron">↑</span>
+      </button>
+      <input type="file" id="importFile" accept="application/json" hidden />
+      <button class="settings-item danger" id="clearBtn">
+        <span>清空所有数据</span>
+      </button>
+    </div>
+
+    <div class="settings-footer">记账 · 本地存储 · v1.0</div>
+  </section>
+
+  <!-- 底部导航 -->
+  <nav class="tab-bar">
+    <button class="tab-btn active" data-tab="home">
+      <div class="tab-icon">📋</div>
+      <div class="tab-label">账单</div>
+    </button>
+    <button class="fab" id="addBtn" aria-label="记一笔">+</button>
+    <button class="tab-btn" data-tab="stats">
+      <div class="tab-icon">📊</div>
+      <div class="tab-label">统计</div>
+    </button>
+    <button class="tab-btn" data-tab="settings">
+      <div class="tab-icon">⚙️</div>
+      <div class="tab-label">设置</div>
+    </button>
+  </nav>
+
+  <!-- 记账弹层 -->
+  <div class="sheet-mask hidden" id="recordSheet">
+    <div class="sheet">
+      <div class="sheet-header">
+        <button class="sheet-cancel" id="recordCancel">取消</button>
+        <div class="sheet-title" id="recordTitle">记一笔</div>
+        <button class="sheet-delete hidden" id="recordDelete">删除</button>
+      </div>
+
+      <div class="type-switch">
+        <button class="type-btn active" data-rtype="expense">支出</button>
+        <button class="type-btn" data-rtype="income">收入</button>
+      </div>
+
+      <div class="amount-display" id="amountDisplay">0.00</div>
+
+      <div class="category-grid" id="categoryGrid"></div>
+
+      <div class="note-presets" id="notePresets"></div>
+
+      <div class="record-meta">
+        <input type="text" class="note-input" id="noteInput" placeholder="备注(可选)" maxlength="30" />
+        <input type="date" class="date-input" id="dateInput" />
+        <input type="time" class="time-input" id="timeInput" step="1" />
+      </div>
+
+      <div class="keypad">
+        <button class="key">1</button><button class="key">2</button><button class="key">3</button><button class="key key-del" data-action="del">⌫</button>
+        <button class="key">4</button><button class="key">5</button><button class="key">6</button><button class="key key-dot">.</button>
+        <button class="key">7</button><button class="key">8</button><button class="key">9</button>
+        <button class="key key-confirm" data-action="confirm">完成</button>
+        <button class="key key-zero">0</button><button class="key key-double-zero">00</button><button class="key key-clear" data-action="clear">C</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 分类管理弹层 -->
+  <div class="sheet-mask hidden" id="catSheet">
+    <div class="sheet sheet-simple">
+      <div class="sheet-header">
+        <button class="sheet-cancel" id="catSheetClose">关闭</button>
+        <div class="sheet-title" id="catSheetTitle">分类管理</div>
+        <button class="sheet-add" id="catAddBtn">+</button>
+      </div>
+      <div class="cat-manage-list" id="catManageList"></div>
+    </div>
+  </div>
+
+  <!-- 分类编辑弹层 -->
+  <div class="sheet-mask hidden" id="catEditSheet">
+    <div class="sheet sheet-simple">
+      <div class="sheet-header">
+        <button class="sheet-cancel" id="catEditCancel">取消</button>
+        <div class="sheet-title" id="catEditTitle">编辑分类</div>
+        <button class="sheet-confirm" id="catEditSave">保存</button>
+      </div>
+      <div class="cat-edit-body">
+        <label class="field">
+          <span class="field-label">名称</span>
+          <input type="text" id="catEditName" maxlength="6" />
+        </label>
+        <div class="field">
+          <span class="field-label">图标</span>
+          <div class="emoji-preview" id="emojiPreview">📦</div>
+          <div class="emoji-picker" id="emojiPicker"></div>
+        </div>
+        <div class="field">
+          <span class="field-label">颜色</span>
+          <div class="color-palette" id="colorPalette"></div>
+        </div>
+        <button class="btn-danger hidden" id="catEditDelete">删除该分类</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 轻提示 -->
+  <div class="toast hidden" id="toast"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

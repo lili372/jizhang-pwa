@@ -1,0 +1,19 @@
+{
+  "name": "记账",
+  "short_name": "记账",
+  "description": "简洁的本地记账工具",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#fafbfa",
+  "theme_color": "#4caf7d",
+  "icons": [
+    {
+      "src": "icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
