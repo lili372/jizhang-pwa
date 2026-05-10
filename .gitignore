@@ -14,3 +14,7 @@ Thumbs.db
 # 本地数据备份
 *.json.backup
 jizhang-*.json
+
+# 本地文档(不推到公网仓库)
+踩坑记录.md
+部署手机.md
