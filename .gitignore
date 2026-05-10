@@ -18,3 +18,6 @@ jizhang-*.json
 # 本地文档(不推到公网仓库)
 踩坑记录.md
 部署手机.md
+
+# Claude 本地配置
+.claude/

@@ -59,7 +59,7 @@ const EMOJI_LIBRARY = [
 // suffixDash: 点击后自动补一个 "-",方便继续输入具体内容
 const NOTE_PRESETS = {
   e_food:    { items: ['早饭', '午饭', '晚饭', '聚餐', '零食', '饮料'], suffixDash: true },
-  e_transit: { items: ['地铁', '公交', '打车', '高铁', '火车', '飞机'], suffixDash: true },
+  e_transit: { items: ['地铁', '公交', '打车', '高铁', '火车', '飞机'], suffixDash: false },
   e_shop:    { items: ['水果', '日用', '药品', '衣物', '数码'], suffixDash: true },
   e_home:    { items: ['房租', '水费', '电费', '物业', '网费'], suffixDash: false },
   e_fun:     { items: ['电影', '游戏', 'KTV', '运动'], suffixDash: true },

@@ -1,7 +1,7 @@
 /* Service Worker - 离线缓存
  * 改动静态文件后升级 CACHE 版本号即可强制更新
  */
-const CACHE = 'jizhang-v7';
+const CACHE = 'jizhang-v8';
 const ASSETS = [
   './',
   './index.html',
