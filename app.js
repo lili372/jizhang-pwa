@@ -63,7 +63,7 @@ const NOTE_PRESETS = {
   e_shop:    { items: ['水果', '日用', '药品', '衣物', '数码'], suffixDash: true },
   e_home:    { items: ['房租', '水费', '电费', '物业', '网费'], suffixDash: false },
   e_fun:     { items: ['电影', '游戏', 'KTV', '运动'], suffixDash: true },
-  e_study:   { items: ['书籍', '课程', '文具'], suffixDash: true },
+  e_study:   { items: ['书籍', '课程', '网课', '文具'], suffixDash: true },
 };
 
 /* ---------- 状态 ---------- */
