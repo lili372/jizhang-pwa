@@ -381,6 +381,56 @@ input {
 .date-input { max-width: 130px; flex: 0 0 auto; }
 .time-input { max-width: 100px; flex: 0 0 auto; }
 
+/* 时间刷新按钮 */
+.time-now-btn {
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: var(--green-light);
+  color: var(--green-dark);
+  font-size: 18px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  transition: background 0.25s ease;
+}
+.time-now-btn:hover {
+  background: #d7eddf;
+}
+/* 图标内层:淡入淡出切换 ⟳↔✓ */
+.time-now-btn .icon {
+  display: inline-block;
+  line-height: 1;
+  transition: transform 0.2s ease, opacity 0.18s ease;
+  position: relative;
+  z-index: 1;
+}
+.time-now-btn.swap .icon {
+  transform: scale(1.15);
+}
+/* 涟漪层:点击时 JS 动态定位中心 */
+.time-now-btn .ripple {
+  position: absolute;
+  top: var(--ripple-y, 50%);
+  left: var(--ripple-x, 50%);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+  transform: translate(-50%, -50%) scale(0);
+  opacity: 0.45;
+  pointer-events: none;
+  animation: time-now-ripple 0.5s cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+@keyframes time-now-ripple {
+  0%   { transform: translate(-50%, -50%) scale(0);  opacity: 0.5; }
+  100% { transform: translate(-50%, -50%) scale(8);  opacity: 0; }
+}
+
 /* ============ 数字键盘 ============ */
 .keypad {
   display: grid;

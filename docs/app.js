@@ -283,16 +283,14 @@ function openRecordSheet(editId) {
   if (editId) {
     const r = state.records.find(x => x.id === editId);
     if (!r) return;
-    // 编辑时把日期时间刷成此刻,保存后这条记录的时间就是最后一次修改的时间
-    const now = new Date();
     recordDraft = {
       id: r.id,
       type: r.type,
       categoryId: r.categoryId,
       amount: r.amount.toString(),
       note: r.note || '',
-      date: fmtDate(now),
-      time: fmtTime(now),
+      date: r.date,
+      time: r.time || '00:00:00',
     };
     $('#recordTitle').textContent = '编辑';
     delBtn.classList.remove('hidden');
@@ -789,6 +787,42 @@ function bindEvents() {
   $('#addBtn').addEventListener('click', () => openRecordSheet());
   $('#recordCancel').addEventListener('click', closeRecordSheet);
   $('#recordDelete').addEventListener('click', deleteRecord);
+
+  // 时间刷新按钮:把日期时间输入框填成此刻
+  // 动画三阶段:涟漪扩散 → 图标 ⟳ 切 ✓(带轻微放大) → ✓ 切回 ⟳
+  $('#timeNowBtn').addEventListener('click', e => {
+    const now = new Date();
+    $('#dateInput').value = fmtDate(now);
+    $('#timeInput').value = fmtTime(now);
+
+    const btn = e.currentTarget;
+    const icon = btn.querySelector('.icon');
+    // 动画期间再次点击忽略,避免叠加
+    if (btn.dataset.busy === '1') return;
+    btn.dataset.busy = '1';
+
+    // 阶段 1:涟漪(0 - 500ms)
+    const rect = btn.getBoundingClientRect();
+    const ripple = document.createElement('span');
+    ripple.className = 'ripple';
+    ripple.style.setProperty('--ripple-x', (e.clientX - rect.left) + 'px');
+    ripple.style.setProperty('--ripple-y', (e.clientY - rect.top) + 'px');
+    btn.appendChild(ripple);
+    ripple.addEventListener('animationend', () => ripple.remove(), { once: true });
+
+    // 阶段 2:涟漪结束后 ⟳ → ✓(500ms 起)
+    setTimeout(() => {
+      icon.textContent = '✓';
+      btn.classList.add('swap');
+    }, 500);
+
+    // 阶段 3:✓ 停留后切回 ⟳(约 1050ms 起)
+    setTimeout(() => {
+      icon.textContent = '⟳';
+      btn.classList.remove('swap');
+      btn.dataset.busy = '';
+    }, 1100);
+  });
 
   // 类型切换
   $$('.type-btn').forEach(b => b.addEventListener('click', () => {
