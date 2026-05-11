@@ -789,14 +789,13 @@ function bindEvents() {
   $('#recordDelete').addEventListener('click', deleteRecord);
 
   // 时间刷新按钮:把日期时间输入框填成此刻
-  // 动画三阶段:涟漪扩散 → 图标 ⟳ 切 ✓(带轻微放大) → ✓ 切回 ⟳
+  // 动画三阶段:涟漪扩散 → 刷新图标淡出、对勾淡入(带轻微放大) → 对勾淡出、刷新图标淡回
   $('#timeNowBtn').addEventListener('click', e => {
     const now = new Date();
     $('#dateInput').value = fmtDate(now);
     $('#timeInput').value = fmtTime(now);
 
     const btn = e.currentTarget;
-    const icon = btn.querySelector('.icon');
     // 动画期间再次点击忽略,避免叠加
     if (btn.dataset.busy === '1') return;
     btn.dataset.busy = '1';
@@ -810,18 +809,16 @@ function bindEvents() {
     btn.appendChild(ripple);
     ripple.addEventListener('animationend', () => ripple.remove(), { once: true });
 
-    // 阶段 2:涟漪结束后 ⟳ → ✓(500ms 起)
+    // 阶段 2:涟漪进行中 300ms 时切成对勾
     setTimeout(() => {
-      icon.textContent = '✓';
       btn.classList.add('swap');
-    }, 500);
+    }, 300);
 
-    // 阶段 3:✓ 停留后切回 ⟳(约 1050ms 起)
+    // 阶段 3:对勾停留 500ms 后切回刷新(300 + 500 = 800ms)
     setTimeout(() => {
-      icon.textContent = '⟳';
       btn.classList.remove('swap');
       btn.dataset.busy = '';
-    }, 1100);
+    }, 800);
   });
 
   // 类型切换
