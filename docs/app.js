@@ -17,6 +17,7 @@ const DEFAULT_EXPENSE_CATS = [
   { id: 'e_home',     name: '居住',   icon: '🏠', color: '#8D7BE8' },
   { id: 'e_fun',      name: '娱乐',   icon: '🎮', color: '#FFB547' },
   { id: 'e_study',    name: '学习',   icon: '📚', color: '#7986CB' },
+  { id: 'e_ai',       name: 'AI',     icon: '🤖', color: '#26A69A' },
   { id: 'e_other',    name: '其他',   icon: '📦', color: '#9AA7A0' },
 ];
 const DEFAULT_INCOME_CATS = [
@@ -64,6 +65,7 @@ const NOTE_PRESETS = {
   e_home:    { items: ['房租', '水费', '电费', '物业', '网费'], suffixDash: false },
   e_fun:     { items: ['电影', '游戏', 'KTV', '运动'], suffixDash: true },
   e_study:   { items: ['书籍', '课程', '网课', '文具'], suffixDash: true },
+  e_ai:      { items: ['API'], suffixDash: true },
 };
 
 /* ---------- 状态 ---------- */
@@ -87,6 +89,9 @@ function loadState() {
       const data = JSON.parse(raw);
       if (!data.categories) data.categories = { expense: [...DEFAULT_EXPENSE_CATS], income: [...DEFAULT_INCOME_CATS] };
       if (!data.records) data.records = [];
+      // 迁移:把 DEFAULT_xxx_CATS 里新加的默认分类补进已有数据
+      // 只按 id 比对,用户自己改过名字/图标/颜色的不覆盖
+      migrateDefaultCategories(data);
       return data;
     }
   } catch (e) {
@@ -99,6 +104,27 @@ function loadState() {
       income:  DEFAULT_INCOME_CATS.map(c => ({ ...c })),
     },
   };
+}
+
+// 把默认分类里新加的项补进现有数据(按 id 去重),保持原顺序地插入到默认顺序对应的位置
+function migrateDefaultCategories(data) {
+  const mergeOne = (type, defaults) => {
+    const list = data.categories[type] || [];
+    const existing = new Set(list.map(c => c.id));
+    defaults.forEach((def, i) => {
+      if (existing.has(def.id)) return;
+      // 找到应插入的位置:第一个"在 defaults 里序号比当前新项更大、且用户数据里存在的"项 之前
+      let insertAt = list.length;
+      for (let j = i + 1; j < defaults.length; j++) {
+        const idx = list.findIndex(c => c.id === defaults[j].id);
+        if (idx !== -1) { insertAt = idx; break; }
+      }
+      list.splice(insertAt, 0, { ...def });
+    });
+    data.categories[type] = list;
+  };
+  mergeOne('expense', DEFAULT_EXPENSE_CATS);
+  mergeOne('income',  DEFAULT_INCOME_CATS);
 }
 function saveState() {
   try {
@@ -257,14 +283,16 @@ function openRecordSheet(editId) {
   if (editId) {
     const r = state.records.find(x => x.id === editId);
     if (!r) return;
+    // 编辑时把日期时间刷成此刻,保存后这条记录的时间就是最后一次修改的时间
+    const now = new Date();
     recordDraft = {
       id: r.id,
       type: r.type,
       categoryId: r.categoryId,
       amount: r.amount.toString(),
       note: r.note || '',
-      date: r.date,
-      time: r.time || '00:00:00',
+      date: fmtDate(now),
+      time: fmtTime(now),
     };
     $('#recordTitle').textContent = '编辑';
     delBtn.classList.remove('hidden');

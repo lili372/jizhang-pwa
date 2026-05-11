@@ -16,8 +16,22 @@ Thumbs.db
 jizhang-*.json
 
 # 本地文档(不推到公网仓库)
-踩坑记录.md
-部署手机.md
-
+PWA部署手机.md
 # Claude 本地配置
 .claude/
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Capacitor / Android 工程(本地体验,不进公网仓库)
+android/
+capacitor.config.json
+capacitor.config.ts
+package.json
+package-lock.json
+
+# 签名密钥(千万别提交!)
+*.jks
+*.keystore
+keystore.properties
