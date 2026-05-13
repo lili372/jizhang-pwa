@@ -17,8 +17,7 @@ const DEFAULT_EXPENSE_CATS = [
   { id: 'e_home',     name: '居住',   icon: '🏠', color: '#8D7BE8' },
   { id: 'e_fun',      name: '娱乐',   icon: '🎮', color: '#FFB547' },
   { id: 'e_study',    name: '学习',   icon: '📚', color: '#7986CB' },
-  { id: 'e_work',     name: '工作',   icon: '💼', color: '#26A69A' },
-  { id: 'e_transfer', name: '转出',   icon: '🔄', color: '#78909C' },
+  { id: 'e_ai',       name: 'AI',     icon: '🤖', color: '#26A69A' },
   { id: 'e_other',    name: '其他',   icon: '📦', color: '#9AA7A0' },
 ];
 const DEFAULT_INCOME_CATS = [
@@ -27,7 +26,6 @@ const DEFAULT_INCOME_CATS = [
   { id: 'i_redpkt',   name: '红包',   icon: '🧧', color: '#E57373' },
   { id: 'i_invest',   name: '理财',   icon: '📈', color: '#5AA5E8' },
   { id: 'i_refund',   name: '报销',   icon: '💵', color: '#8D7BE8' },
-  { id: 'i_transfer', name: '转入',   icon: '🔄', color: '#78909C' },
   { id: 'i_other',    name: '其他',   icon: '📦', color: '#9AA7A0' },
 ];
 
@@ -61,15 +59,13 @@ const EMOJI_LIBRARY = [
 // 分类对应的备注快捷标签,按分类 id 匹配
 // suffixDash: 点击后自动补一个 "-",方便继续输入具体内容
 const NOTE_PRESETS = {
-  e_food:     { items: ['早饭', '午饭', '晚饭', '聚餐', '零食', '饮料'], suffixDash: true },
-  e_transit:  { items: ['地铁', '公交', '打车', '高铁', '火车', '飞机'], suffixDash: false },
-  e_shop:     { items: ['水果', '日用', '药品', '衣物', '数码'], suffixDash: true },
-  e_home:     { items: ['房租', '水费', '电费', '物业', '网费'], suffixDash: false },
-  e_fun:      { items: ['电影', '游戏', 'KTV', '运动'], suffixDash: true },
-  e_study:    { items: ['书籍', '课程', '网课', '文具'], suffixDash: true },
-  e_work:     { items: ['API', '软件', '差旅', '打印', '设备'], suffixDash: true },
-  e_transfer: { items: ['借出', '还款', '随礼', '代付', '转账'], suffixDash: true },
-  i_transfer: { items: ['借入', '还回', '收礼', '转账'], suffixDash: true },
+  e_food:    { items: ['早饭', '午饭', '晚饭', '聚餐', '零食', '饮料'], suffixDash: true },
+  e_transit: { items: ['地铁', '公交', '打车', '高铁', '火车', '飞机'], suffixDash: false },
+  e_shop:    { items: ['水果', '日用', '药品', '衣物', '数码'], suffixDash: true },
+  e_home:    { items: ['房租', '水费', '电费', '物业', '网费'], suffixDash: false },
+  e_fun:     { items: ['电影', '游戏', 'KTV', '运动'], suffixDash: true },
+  e_study:   { items: ['书籍', '课程', '网课', '文具'], suffixDash: true },
+  e_ai:      { items: ['API'], suffixDash: true },
 };
 
 /* ---------- 状态 ---------- */
@@ -96,8 +92,6 @@ function loadState() {
       // 迁移:把 DEFAULT_xxx_CATS 里新加的默认分类补进已有数据
       // 只按 id 比对,用户自己改过名字/图标/颜色的不覆盖
       migrateDefaultCategories(data);
-      // 迁移:把已废弃的默认分类(e_ai → e_work)整理掉
-      migrateDeprecatedCategories(data);
       return data;
     }
   } catch (e) {
@@ -131,43 +125,6 @@ function migrateDefaultCategories(data) {
   };
   mergeOne('expense', DEFAULT_EXPENSE_CATS);
   mergeOne('income',  DEFAULT_INCOME_CATS);
-}
-
-// 废弃分类迁移表:旧 id → { to: 新 id, notePrefix?: 记录备注前缀 }
-// 运行时把用户数据里废弃 id 的记录改归到新分类,并从分类列表里删除旧项
-const DEPRECATED_CATEGORIES = {
-  expense: {
-    e_ai: { to: 'e_work', notePrefix: 'API-' },
-  },
-  income: {},
-};
-
-function migrateDeprecatedCategories(data) {
-  const handleOne = (type, map) => {
-    const list = data.categories[type] || [];
-    Object.entries(map).forEach(([oldId, { to, notePrefix }]) => {
-      // 只在目标分类存在的情况下才迁移,避免把记录指向一个不存在的 id
-      const hasTarget = list.some(c => c.id === to);
-      if (!hasTarget) return;
-      // 改记录 categoryId
-      data.records.forEach(r => {
-        if (r.type === type && r.categoryId === oldId) {
-          r.categoryId = to;
-          if (notePrefix) {
-            const note = r.note || '';
-            // 已经带前缀的不重复加,避免多次迁移时叠加
-            if (!note.startsWith(notePrefix)) {
-              r.note = notePrefix + note;
-            }
-          }
-        }
-      });
-      // 从分类列表删除旧项
-      data.categories[type] = list.filter(c => c.id !== oldId);
-    });
-  };
-  handleOne('expense', DEPRECATED_CATEGORIES.expense);
-  handleOne('income',  DEPRECATED_CATEGORIES.income);
 }
 function saveState() {
   try {
