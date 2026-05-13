@@ -1,7 +1,7 @@
 /* Service Worker - 离线缓存
  * 改动静态文件后升级 CACHE 版本号即可强制更新
  */
-const CACHE = 'jizhang-v14';
+const CACHE = 'jizhang-v15';
 const ASSETS = [
   './',
   './index.html',
@@ -25,17 +25,25 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
+  const req = e.request;
+  const isNavigate = req.mode === 'navigate' || req.destination === 'document';
+
   e.respondWith(
-    caches.match(e.request).then(cached => {
+    caches.match(req).then(cached => {
       if (cached) return cached;
-      return fetch(e.request).then(res => {
+      return fetch(req).then(res => {
         // 仅缓存同源成功响应
-        if (res.ok && new URL(e.request.url).origin === location.origin) {
+        if (res.ok && new URL(req.url).origin === location.origin) {
           const copy = res.clone();
-          caches.open(CACHE).then(c => c.put(e.request, copy));
+          caches.open(CACHE).then(c => c.put(req, copy));
         }
         return res;
-      }).catch(() => cached);
+      }).catch(() => {
+        // 导航请求兜底:返回缓存的 index.html,避免白屏
+        if (isNavigate) return caches.match('./index.html');
+        // 非导航请求:返回 503 而不是 undefined,防止 respondWith 收到空值
+        return new Response('', { status: 503, statusText: 'Offline' });
+      });
     })
   );
 });

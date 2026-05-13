@@ -12,7 +12,7 @@ const STORAGE_KEY = 'jizhang_data_v1';
 // 迁移前自动快照的 key 前缀,每次代码版本升级时做一次快照
 const MIGRATION_SNAPSHOT_PREFIX = 'jizhang_data_v1__pre_migrate__';
 // 代码版本号,同步到 sw.js 里的 CACHE 版本号。改默认分类 / 迁移逻辑时务必 +1
-const CODE_VERSION = 'v14';
+const CODE_VERSION = 'v15';
 
 const DEFAULT_EXPENSE_CATS = [
   { id: 'e_food',     name: '餐饮',   icon: '🍚', color: '#FF9A62' },
@@ -885,8 +885,8 @@ function clearAll() {
   toast('已清空');
 }
 
-// 安全网 4:数据诊断面板
-function showDiagnostics() {
+// 生成诊断文本(不带副作用,可独立调用)
+function buildDiagnosticsText() {
   const lines = [];
   lines.push('=== 当前内存 state ===');
   lines.push('记录条数: ' + (state.records?.length ?? '?'));
@@ -939,16 +939,39 @@ function showDiagnostics() {
   lines.push('=== 代码版本 ===');
   lines.push('CODE_VERSION: ' + CODE_VERSION);
 
-  // 显示弹层 + 提供"复制"和"恢复快照"
-  const text = lines.join('\n');
-  const action = prompt(text + '\n\n输入 r 回车 → 从最近一次快照恢复\n输入 c 回车 → 复制以上信息到剪贴板\n直接关闭 → 取消', '');
+  return lines.join('\n');
+}
 
-  if (action === 'r') restoreFromSnapshot();
-  else if (action === 'c') {
+// 打开诊断弹层
+function showDiagnostics() {
+  $('#diagText').textContent = buildDiagnosticsText();
+  $('#diagSheet').classList.remove('hidden');
+}
+
+function closeDiagnostics() {
+  $('#diagSheet').classList.add('hidden');
+}
+
+// 复制诊断文本到剪贴板
+function copyDiagnosticsText() {
+  const text = $('#diagText').textContent;
+  const done = () => toast('已复制诊断信息');
+  const fail = () => toast('复制失败,请手动长按选择');
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(text).then(done).catch(fail);
+  } else {
+    // 兼容老浏览器:select + execCommand
     try {
-      navigator.clipboard.writeText(text);
-      toast('已复制');
-    } catch (_) { toast('复制失败,请手动选择'); }
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      done();
+    } catch (_) { fail(); }
   }
 }
 
@@ -972,6 +995,10 @@ function restoreFromSnapshot() {
     state = data;
     saveState();
     renderHome();
+    // 刷新诊断面板里显示的文本(记录数已变)并关掉弹层
+    if ($('#diagSheet') && !$('#diagSheet').classList.contains('hidden')) {
+      $('#diagText').textContent = buildDiagnosticsText();
+    }
     toast('已从快照恢复(' + data.records.length + ' 条)');
   } catch (e) {
     toast('恢复失败: ' + e.message);
@@ -1082,6 +1109,12 @@ function bindEvents() {
     e.target.value = '';
   });
   $('#diagBtn').addEventListener('click', showDiagnostics);
+  $('#diagClose').addEventListener('click', closeDiagnostics);
+  $('#diagCopyBtn').addEventListener('click', copyDiagnosticsText);
+  $('#diagRestoreBtn').addEventListener('click', restoreFromSnapshot);
+  $('#diagSheet').addEventListener('click', e => {
+    if (e.target.id === 'diagSheet') closeDiagnostics();
+  });
   $('#clearBtn').addEventListener('click', clearAll);
 }
 

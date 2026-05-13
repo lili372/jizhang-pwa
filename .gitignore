@@ -17,6 +17,7 @@ jizhang-*.json
 
 # 本地文档(不推到公网仓库)
 PWA部署手机.md
+CLAUDE.md
 # Claude 本地配置
 .claude/
 

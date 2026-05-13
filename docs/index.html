@@ -200,6 +200,23 @@
     </div>
   </div>
 
+  <!-- 数据诊断弹层 -->
+  <div class="sheet-mask hidden" id="diagSheet">
+    <div class="sheet sheet-simple">
+      <div class="sheet-header">
+        <button class="sheet-cancel" id="diagClose">关闭</button>
+        <div class="sheet-title">数据诊断</div>
+        <button class="sheet-confirm" id="diagCopyBtn">复制</button>
+      </div>
+      <div class="diag-body">
+        <pre class="diag-text" id="diagText"></pre>
+        <div class="diag-actions">
+          <button class="diag-action-btn diag-action-primary" id="diagRestoreBtn">从最近快照恢复</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- 轻提示 -->
   <div class="toast hidden" id="toast"></div>
 
