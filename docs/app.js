@@ -12,7 +12,7 @@ const STORAGE_KEY = 'jizhang_data_v1';
 // 迁移前自动快照的 key 前缀,每次代码版本升级时做一次快照
 const MIGRATION_SNAPSHOT_PREFIX = 'jizhang_data_v1__pre_migrate__';
 // 代码版本号,同步到 sw.js 里的 CACHE 版本号。改默认分类 / 迁移逻辑时务必 +1
-const CODE_VERSION = 'v15';
+const CODE_VERSION = 'v16';
 
 const DEFAULT_EXPENSE_CATS = [
   { id: 'e_food',     name: '餐饮',   icon: '🍚', color: '#FF9A62' },
@@ -1130,4 +1130,6 @@ document.addEventListener('DOMContentLoaded', () => {
   bindEvents();
   renderHome();
   registerSW();
+  const footer = document.getElementById('settingsFooter');
+  if (footer) footer.textContent = '记账 · 本地存储 · ' + CODE_VERSION;
 });
