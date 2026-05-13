@@ -9,6 +9,10 @@
 //   category: { id, name, icon, color, builtin }
 
 const STORAGE_KEY = 'jizhang_data_v1';
+// 迁移前自动快照的 key 前缀,每次代码版本升级时做一次快照
+const MIGRATION_SNAPSHOT_PREFIX = 'jizhang_data_v1__pre_migrate__';
+// 代码版本号,同步到 sw.js 里的 CACHE 版本号。改默认分类 / 迁移逻辑时务必 +1
+const CODE_VERSION = 'v14';
 
 const DEFAULT_EXPENSE_CATS = [
   { id: 'e_food',     name: '餐饮',   icon: '🍚', color: '#FF9A62' },
@@ -17,7 +21,8 @@ const DEFAULT_EXPENSE_CATS = [
   { id: 'e_home',     name: '居住',   icon: '🏠', color: '#8D7BE8' },
   { id: 'e_fun',      name: '娱乐',   icon: '🎮', color: '#FFB547' },
   { id: 'e_study',    name: '学习',   icon: '📚', color: '#7986CB' },
-  { id: 'e_ai',       name: 'AI',     icon: '🤖', color: '#26A69A' },
+  { id: 'e_work',     name: '工作',   icon: '💼', color: '#26A69A' },
+  { id: 'e_transfer', name: '转出',   icon: '🔄', color: '#78909C' },
   { id: 'e_other',    name: '其他',   icon: '📦', color: '#9AA7A0' },
 ];
 const DEFAULT_INCOME_CATS = [
@@ -26,6 +31,7 @@ const DEFAULT_INCOME_CATS = [
   { id: 'i_redpkt',   name: '红包',   icon: '🧧', color: '#E57373' },
   { id: 'i_invest',   name: '理财',   icon: '📈', color: '#5AA5E8' },
   { id: 'i_refund',   name: '报销',   icon: '💵', color: '#8D7BE8' },
+  { id: 'i_transfer', name: '转入',   icon: '🔄', color: '#78909C' },
   { id: 'i_other',    name: '其他',   icon: '📦', color: '#9AA7A0' },
 ];
 
@@ -59,13 +65,25 @@ const EMOJI_LIBRARY = [
 // 分类对应的备注快捷标签,按分类 id 匹配
 // suffixDash: 点击后自动补一个 "-",方便继续输入具体内容
 const NOTE_PRESETS = {
-  e_food:    { items: ['早饭', '午饭', '晚饭', '聚餐', '零食', '饮料'], suffixDash: true },
-  e_transit: { items: ['地铁', '公交', '打车', '高铁', '火车', '飞机'], suffixDash: false },
-  e_shop:    { items: ['水果', '日用', '药品', '衣物', '数码'], suffixDash: true },
-  e_home:    { items: ['房租', '水费', '电费', '物业', '网费'], suffixDash: false },
-  e_fun:     { items: ['电影', '游戏', 'KTV', '运动'], suffixDash: true },
-  e_study:   { items: ['书籍', '课程', '网课', '文具'], suffixDash: true },
-  e_ai:      { items: ['API'], suffixDash: true },
+  e_food:     { items: ['早饭', '午饭', '晚饭', '聚餐', '零食', '饮料'], suffixDash: true },
+  e_transit:  { items: ['地铁', '公交', '打车', '高铁', '火车', '飞机'], suffixDash: false },
+  e_shop:     { items: ['水果', '日用', '药品', '衣物', '数码'], suffixDash: true },
+  e_home:     { items: ['房租', '水费', '电费', '物业', '网费'], suffixDash: false },
+  e_fun:      { items: ['电影', '游戏', 'KTV', '运动'], suffixDash: true },
+  e_study:    { items: ['书籍', '课程', '网课', '文具'], suffixDash: true },
+  e_work:     { items: ['API', '软件', '差旅', '打印', '设备'], suffixDash: true },
+  e_transfer: { items: ['借出', '还款', '随礼', '代付', '转账'], suffixDash: true },
+  i_transfer: { items: ['借入', '还回', '收礼', '转账'], suffixDash: true },
+};
+
+// 废弃分类迁移表:旧 id → { to: 新 id, notePrefix?: 记录备注前缀 }
+// 运行时把用户数据里废弃 id 的记录改归到新分类,并从分类列表里删除旧项
+// 注意:必须声明在 `let state = loadState()` 之前,否则 loadState 调用会触发 TDZ 引用错误
+const DEPRECATED_CATEGORIES = {
+  expense: {
+    e_ai: { to: 'e_work', notePrefix: 'API-' },
+  },
+  income: {},
 };
 
 /* ---------- 状态 ---------- */
@@ -83,20 +101,57 @@ let catEditing = null; // {mode:'new'|'edit', type, category}
 
 /* ---------- 存储 ---------- */
 function loadState() {
+  // 诊断:把 loadState 的执行步骤逐项记录,一旦抛异常能看到是哪一步
+  window.__loadTrace = [];
+  const trace = (step, info) => window.__loadTrace.push(step + ': ' + JSON.stringify(info));
+
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
+    trace('1-getItem', { rawLen: raw?.length ?? null, rawType: typeof raw });
     if (raw) {
       const data = JSON.parse(raw);
+      trace('2-parse', {
+        recordsCount: data?.records?.length ?? null,
+        expCats: data?.categories?.expense?.length ?? null,
+        incCats: data?.categories?.income?.length ?? null,
+      });
       if (!data.categories) data.categories = { expense: [...DEFAULT_EXPENSE_CATS], income: [...DEFAULT_INCOME_CATS] };
       if (!data.records) data.records = [];
-      // 迁移:把 DEFAULT_xxx_CATS 里新加的默认分类补进已有数据
-      // 只按 id 比对,用户自己改过名字/图标/颜色的不覆盖
+      trace('3-after-default-fill', { recordsCount: data.records.length });
+
+      // 安全网 1:迁移前自动快照(每个代码版本只快照一次,避免反复覆盖)
+      const snapshotKey = MIGRATION_SNAPSHOT_PREFIX + CODE_VERSION;
+      if (!localStorage.getItem(snapshotKey)) {
+        try {
+          localStorage.setItem(snapshotKey, raw);
+          trace('4-snapshot-created', { key: snapshotKey });
+        } catch (e) {
+          trace('4-snapshot-fail', { err: e.message });
+        }
+      } else {
+        trace('4-snapshot-skip', { key: snapshotKey });
+      }
+
       migrateDefaultCategories(data);
+      trace('5-migrate-default', { recordsCount: data.records.length });
+
+      migrateDeprecatedCategories(data);
+      trace('6-migrate-deprecated', { recordsCount: data.records.length });
+
+      trace('7-return', { recordsCount: data.records.length });
       return data;
+    } else {
+      trace('1b-raw-empty', {});
     }
   } catch (e) {
-    console.warn('读取数据失败', e);
+    trace('EXCEPTION', { msg: e.message, stack: e.stack?.split('\n').slice(0, 3).join(' | ') });
+    console.error('[loadState] 抛异常:', e);
+    // 不再吞:用 alert 立刻暴露
+    try {
+      alert('loadState 异常!\n' + e.message + '\n\n' + (e.stack?.split('\n').slice(0, 4).join('\n') || ''));
+    } catch (_) {}
   }
+  trace('FALLBACK', { reason: 'returning empty default' });
   return {
     records: [],
     categories: {
@@ -126,7 +181,52 @@ function migrateDefaultCategories(data) {
   mergeOne('expense', DEFAULT_EXPENSE_CATS);
   mergeOne('income',  DEFAULT_INCOME_CATS);
 }
+
+function migrateDeprecatedCategories(data) {
+  const handleOne = (type, map) => {
+    const list = data.categories[type] || [];
+    Object.entries(map).forEach(([oldId, { to, notePrefix }]) => {
+      // 只在目标分类存在的情况下才迁移,避免把记录指向一个不存在的 id
+      const hasTarget = list.some(c => c.id === to);
+      if (!hasTarget) return;
+      // 改记录 categoryId
+      data.records.forEach(r => {
+        if (r.type === type && r.categoryId === oldId) {
+          r.categoryId = to;
+          if (notePrefix) {
+            const note = r.note || '';
+            // 已经带前缀的不重复加,避免多次迁移时叠加
+            if (!note.startsWith(notePrefix)) {
+              r.note = notePrefix + note;
+            }
+          }
+        }
+      });
+      // 从分类列表删除旧项
+      data.categories[type] = list.filter(c => c.id !== oldId);
+    });
+  };
+  handleOne('expense', DEPRECATED_CATEGORIES.expense);
+  handleOne('income',  DEPRECATED_CATEGORIES.income);
+}
 function saveState() {
+  // 安全网 2:拦截"可疑的空写入"——防止某种意外路径把 records 清空后又落盘
+  // 规则:如果 localStorage 里现存 records > 0,而即将写入的 state.records 是 0 或缺失,拒绝
+  try {
+    const existingRaw = localStorage.getItem(STORAGE_KEY);
+    if (existingRaw) {
+      const existing = JSON.parse(existingRaw);
+      const existingCount = Array.isArray(existing?.records) ? existing.records.length : 0;
+      const newCount = Array.isArray(state?.records) ? state.records.length : 0;
+      // 已有数据 → 新数据为空,且不是用户主动清空 → 阻止
+      if (existingCount > 0 && newCount === 0 && !state.__allowEmpty) {
+        console.error('[saveState] 拒绝写入:current records=' + existingCount + ' → new records=0');
+        toast('检测到异常,已阻止写入');
+        return;
+      }
+    }
+  } catch (_) { /* 校验出错不阻塞正常写入 */ }
+
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch (e) {
@@ -753,10 +853,13 @@ function importData(file) {
       const data = JSON.parse(reader.result);
       if (!data.records || !data.categories) throw new Error('文件格式不正确');
       if (!confirm('导入会覆盖当前所有数据,确定继续?')) return;
+      // 安全网 3:导入也走一次迁移,避免老备份与新代码不一致(比如老备份含 e_ai 而新代码已废弃)
+      migrateDefaultCategories(data);
+      migrateDeprecatedCategories(data);
       state = data;
       saveState();
       renderHome();
-      toast('已导入');
+      toast('已导入(' + data.records.length + ' 条)');
     } catch (e) {
       toast('导入失败: ' + e.message);
     }
@@ -773,10 +876,106 @@ function clearAll() {
       expense: DEFAULT_EXPENSE_CATS.map(c => ({ ...c })),
       income:  DEFAULT_INCOME_CATS.map(c => ({ ...c })),
     },
+    // 标记:用户主动清空,允许绕过 saveState 的空写入拦截
+    __allowEmpty: true,
   };
   saveState();
+  delete state.__allowEmpty;
   renderHome();
   toast('已清空');
+}
+
+// 安全网 4:数据诊断面板
+function showDiagnostics() {
+  const lines = [];
+  lines.push('=== 当前内存 state ===');
+  lines.push('记录条数: ' + (state.records?.length ?? '?'));
+  lines.push('支出分类: ' + (state.categories?.expense?.map(c => c.id).join(', ') ?? '?'));
+  lines.push('收入分类: ' + (state.categories?.income?.map(c => c.id).join(', ') ?? '?'));
+
+  lines.push('');
+  lines.push('=== loadState 执行轨迹 ===');
+  if (window.__loadTrace?.length) {
+    window.__loadTrace.forEach(t => lines.push(t));
+  } else {
+    lines.push('(无,可能 loadState 未执行)');
+  }
+
+  lines.push('');
+  lines.push('=== localStorage 主数据 ===');
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const data = JSON.parse(raw);
+      lines.push('字节数: ' + raw.length);
+      lines.push('记录条数: ' + (data.records?.length ?? '?'));
+      lines.push('支出分类: ' + (data.categories?.expense?.map(c => c.id).join(', ') ?? '?'));
+      lines.push('收入分类: ' + (data.categories?.income?.map(c => c.id).join(', ') ?? '?'));
+    } else {
+      lines.push('(空)');
+    }
+  } catch (e) {
+    lines.push('读取失败: ' + e.message);
+  }
+
+  lines.push('');
+  lines.push('=== 迁移前快照 ===');
+  let foundSnapshot = false;
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && key.startsWith(MIGRATION_SNAPSHOT_PREFIX)) {
+      foundSnapshot = true;
+      try {
+        const snap = JSON.parse(localStorage.getItem(key));
+        lines.push(key.replace(MIGRATION_SNAPSHOT_PREFIX, '') + ': ' + (snap.records?.length ?? '?') + ' 条');
+      } catch (e) {
+        lines.push(key + ': 解析失败');
+      }
+    }
+  }
+  if (!foundSnapshot) lines.push('(无)');
+
+  lines.push('');
+  lines.push('=== 代码版本 ===');
+  lines.push('CODE_VERSION: ' + CODE_VERSION);
+
+  // 显示弹层 + 提供"复制"和"恢复快照"
+  const text = lines.join('\n');
+  const action = prompt(text + '\n\n输入 r 回车 → 从最近一次快照恢复\n输入 c 回车 → 复制以上信息到剪贴板\n直接关闭 → 取消', '');
+
+  if (action === 'r') restoreFromSnapshot();
+  else if (action === 'c') {
+    try {
+      navigator.clipboard.writeText(text);
+      toast('已复制');
+    } catch (_) { toast('复制失败,请手动选择'); }
+  }
+}
+
+function restoreFromSnapshot() {
+  // 找最新的一个快照(按 key 排序最大的)
+  const keys = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k && k.startsWith(MIGRATION_SNAPSHOT_PREFIX)) keys.push(k);
+  }
+  if (keys.length === 0) { toast('没有可恢复的快照'); return; }
+  keys.sort();
+  const latest = keys[keys.length - 1];
+  if (!confirm('将用快照覆盖当前数据(快照: ' + latest.replace(MIGRATION_SNAPSHOT_PREFIX, '') + '),确定?')) return;
+  try {
+    const raw = localStorage.getItem(latest);
+    const data = JSON.parse(raw);
+    if (!data.records || !data.categories) throw new Error('快照格式异常');
+    migrateDefaultCategories(data);
+    migrateDeprecatedCategories(data);
+    state = data;
+    saveState();
+    renderHome();
+    toast('已从快照恢复(' + data.records.length + ' 条)');
+  } catch (e) {
+    toast('恢复失败: ' + e.message);
+  }
 }
 
 /* ---------- 事件绑定 ---------- */
@@ -882,6 +1081,7 @@ function bindEvents() {
     if (f) importData(f);
     e.target.value = '';
   });
+  $('#diagBtn').addEventListener('click', showDiagnostics);
   $('#clearBtn').addEventListener('click', clearAll);
 }
 
